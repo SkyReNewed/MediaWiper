@@ -178,8 +178,18 @@ class MediaWiperGUI(QWidget):
             # Start the scheduler.py script as a separate process
             try:
                 scheduler_path = os.path.join(os.getcwd(), "scheduler.py")
+
+                # Create a dictionary of wipe arguments
+                wipe_args = {
+                    "target_dir": target_dir,
+                    "secure_delete": secure_delete,
+                    "verbose": verbose,
+                    "extensions": extensions
+                }
+                wipe_args_json = json.dumps(wipe_args)
+
                 subprocess.Popen(
-                    ["python", scheduler_path, "--schedule_info", schedule_info_json],
+                    ["python", scheduler_path, "--schedule_info", schedule_info_json, "--wipe_args", wipe_args_json],
                     creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
                 )
                 self.log_widget.append("Scheduled media wiping task.")
