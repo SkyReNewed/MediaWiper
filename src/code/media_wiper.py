@@ -3,12 +3,12 @@ import shutil
 import logging
 import argparse
 import sys
-import schedule
-import time
+import subprocess
+import json
 from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit,
                              QPushButton, QVBoxLayout, QCheckBox, QTextEdit,
-                             QFileDialog, QComboBox, QTimeEdit)
-from PyQt6.QtCore import Qt, QTime
+                             QFileDialog, QComboBox, QTimeEdit, QMessageBox, QDateEdit)
+from PyQt6.QtCore import Qt, QTime, QDate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -20,9 +20,9 @@ def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, 
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    logging.info(f"Wiping media files from: {target_dir}")
+    logging.info(f"Starting media wiping from: {target_dir}")
     if log_widget:
-        log_widget.append(f"Wiping media files from: {target_dir}")
+        log_widget.append(f"Starting media wiping from: {target_dir}")
 
     # Define default media file extensions
     default_video_extensions = ['.mp4', '.avi', '.flv', '.wmv', '.mov', '.webm', '.mkv', '.f4v', '.vob', '.ogg', '.gifv', '.amv', '.mpg', '.mp2', '.mpeg', '.mpe', '.mpv', '.m4v', '.3gp']
@@ -35,50 +35,37 @@ def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, 
         # Use default extensions
         media_extensions = default_video_extensions + default_audio_extensions
 
-    for root, _, files in os.walk(target_dir):
-        for file in files:
-            file_path = os.path.join(root, file)
-            file_extension = os.path.splitext(file)[1].lower()
+    try:
+        for root, _, files in os.walk(target_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_extension = os.path.splitext(file)[1].lower()
 
-            if file_extension in media_extensions:
-                try:
-                    if secure_delete:
-                        # Implement secure deletion (replace with actual secure deletion logic)
-                        logging.debug(f"Securely deleting: {file_path}")
+                if file_extension in media_extensions:
+                    try:
+                        if secure_delete:
+                            # Implement secure deletion (replace with actual secure deletion logic)
+                            logging.debug(f"Securely deleting: {file_path}")
+                            if log_widget:
+                                log_widget.append(f"Securely deleting: {file_path}")
+                            os.remove(file_path)
+                        else:
+                            os.remove(file_path)
+                            logging.debug(f"Deleted: {file_path}")
+                            if log_widget:
+                                log_widget.append(f"Deleted: {file_path}")
+                    except Exception as e:
+                        logging.error(f"Error deleting {file_path}: {e}")
                         if log_widget:
-                            log_widget.append(f"Securely deleting: {file_path}")
-                        os.remove(file_path)
-                    else:
-                        os.remove(file_path)
-                        logging.debug(f"Deleted: {file_path}")
-                        if log_widget:
-                            log_widget.append(f"Deleted: {file_path}")
-                except Exception as e:
-                    logging.error(f"Error deleting {file_path}: {e}")
-                    if log_widget:
-                        log_widget.append(f"Error deleting {file_path}: {e}")
+                            log_widget.append(f"Error deleting {file_path}: {e}")
+    except Exception as e:
+        logging.error(f"Error during media wiping: {e}")
+        if log_widget:
+            log_widget.append(f"Error during media wiping: {e}")
 
     logging.info("Media wiping complete.")
     if log_widget:
         log_widget.append("Media wiping complete.")
-
-def schedule_wipe_media(target_dir, secure_delete, verbose, extensions, log_widget, schedule_interval, schedule_time):
-    """
-    Schedules the media wiping task.
-    """
-    def scheduled_task():
-        wipe_media(target_dir, secure_delete, verbose, extensions, log_widget)
-
-    if schedule_interval == "Daily":
-        schedule.every().day.at(schedule_time.strftime("%H:%M")).do(scheduled_task)
-    elif schedule_interval == "Weekly":
-        schedule.every().week.on(0).at(schedule_time.strftime("%H:%M")).do(scheduled_task) # 0 for Monday
-    elif schedule_interval == "Monthly":
-        schedule.every().month.on(1).at(schedule_time.strftime("%H:%M")).do(scheduled_task) # 1 for the first day of the month
-
-    while True:
-        schedule.run_pending()
-        time.sleep(60)  # Wait for 1 minute
 
 class MediaWiperGUI(QWidget):
     def __init__(self):
@@ -96,7 +83,7 @@ class MediaWiperGUI(QWidget):
         self.extensions_input = QLineEdit()
 
         self.enable_scheduling_checkbox = QCheckBox("Enable Scheduling")
-        self.enable_scheduling_checkbox.setEnabled(False)
+        self.enable_scheduling_checkbox.stateChanged.connect(self.toggle_scheduling)
 
         self.schedule_interval_label = QLabel("Schedule Interval:")
         self.schedule_interval_combo = QComboBox()
@@ -104,6 +91,11 @@ class MediaWiperGUI(QWidget):
         self.schedule_interval_combo.addItem("Weekly")
         self.schedule_interval_combo.addItem("Monthly")
         self.schedule_interval_combo.setEnabled(False)
+
+        self.schedule_date_label = QLabel("Schedule Date:")
+        self.schedule_date_edit = QDateEdit()
+        self.schedule_date_edit.setDate(QDate.currentDate())
+        self.schedule_date_edit.setEnabled(False)
 
         self.schedule_time_label = QLabel("Schedule Time:")
         self.schedule_time_edit = QTimeEdit()
@@ -127,8 +119,12 @@ class MediaWiperGUI(QWidget):
         layout.addWidget(self.enable_scheduling_checkbox)
         layout.addWidget(self.schedule_interval_label)
         layout.addWidget(self.schedule_interval_combo)
+        layout.addWidget(self.schedule_date_label)
+        layout.addWidget(self.schedule_date_edit)
         layout.addWidget(self.schedule_time_label)
         layout.addWidget(self.schedule_time_edit)
+        self.next_schedule_label = QLabel("Next Schedule: N/A")
+        layout.addWidget(self.next_schedule_label)
         layout.addWidget(self.wipe_button)
         layout.addWidget(self.log_widget)
 
@@ -139,6 +135,11 @@ class MediaWiperGUI(QWidget):
         if directory:
             self.target_dir_input.setText(directory)
 
+    def toggle_scheduling(self, state):
+        self.schedule_interval_combo.setEnabled(state == Qt.CheckState.Checked.value)
+        self.schedule_date_edit.setEnabled(state == Qt.CheckState.Checked.value)
+        self.schedule_time_edit.setEnabled(state == Qt.CheckState.Checked.value)
+
     def start_wiping(self):
         target_dir = self.target_dir_input.text()
         secure_delete = self.secure_delete_checkbox.isChecked()
@@ -146,11 +147,45 @@ class MediaWiperGUI(QWidget):
         extensions = self.extensions_input.text()
         enable_scheduling = self.enable_scheduling_checkbox.isChecked()
 
+        if not target_dir:
+            QMessageBox.critical(self, "Error", "Please select a target directory.")
+            return
+
         if enable_scheduling:
             schedule_interval = self.schedule_interval_combo.currentText()
+            schedule_date = self.schedule_date_edit.date()
             schedule_time = self.schedule_time_edit.time()
-            # Schedule the media wiping task
-            schedule_wipe_media(target_dir, secure_delete, verbose, extensions, self.log_widget, schedule_interval, schedule_time)
+
+            # Create schedule info
+            schedule_info = {
+                "interval": schedule_interval.lower(),
+                "date": schedule_date.toString("yyyy-MM-dd"),
+                "time": schedule_time.toString("HH:mm")
+            }
+            schedule_info_json = json.dumps(schedule_info)
+
+            # Calculate next schedule time
+            next_schedule = "N/A"
+            if schedule_interval == "Daily":
+                next_schedule = schedule_date.addDays(1).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
+            elif schedule_interval == "Weekly":
+                next_schedule = schedule_date.addDays(7).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
+            elif schedule_interval == "Monthly":
+                next_schedule = schedule_date.addMonths(1).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
+
+            self.next_schedule_label.setText(f"Next Schedule: {next_schedule}")
+
+            # Start the scheduler.py script as a separate process
+            try:
+                scheduler_path = os.path.join(os.getcwd(), "scheduler.py")
+                subprocess.Popen(
+                    ["python", scheduler_path, "--schedule_info", schedule_info_json],
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+                self.log_widget.append("Scheduled media wiping task.")
+                QMessageBox.information(self, "Success", "Media wiping scheduled successfully.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to start scheduler: {e}")
         else:
             # Wipe media immediately
             wipe_media(target_dir, secure_delete, verbose, extensions, self.log_widget)
