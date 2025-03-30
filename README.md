@@ -83,4 +83,4 @@ The GUI allows you to schedule media wiping tasks to run automatically at a spec
 
 ## Releases
 
-You can download the latest release of MediaWiper from [link to releases].
+You can download the latest release of MediaWiper from [here](https://github.com/SkyReNewed/MediaWiper/releases).
