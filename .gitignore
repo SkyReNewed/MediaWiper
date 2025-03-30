@@ -11,4 +11,4 @@ venv/
 plans and ideas
 oldrelease
 *.spec
-build
+.github
