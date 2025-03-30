@@ -1,2 +1,14 @@
 ﻿__pycache__
+build/
+*.pyc
+*.egg-info/
+dist/
+*.log
+*.tmp
+env/
+venv/
+*.DS_Store
 plans and ideas
+oldrelease
+*.spec
+build
