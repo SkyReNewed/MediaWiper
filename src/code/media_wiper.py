@@ -30,7 +30,7 @@ def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, 
 
     if extensions:
         # Use user-specified extensions
-        media_extensions = extensions.split(',')
+        media_extensions = [ext if ext.startswith('.') else '.' + ext for ext in extensions.split(',')]
     else:
         # Use default extensions
         media_extensions = default_video_extensions + default_audio_extensions
