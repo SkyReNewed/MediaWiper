@@ -1,0 +1,16 @@
+name: Greetings
+
+on: [pull_request_target, issues]
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "🎉 Thanks for contributing! I’ll check your changes for style, tests, and documentation. If there’s anything to adjust, I’ll provide feedback. Feel free to ask if you have any questions. Thanks again! 😊"
+        pr-message: "🎉 I appreciate your contribution! I’ll review your changes for code style, tests, and documentation. If any adjustments are needed, I’ll provide feedback. Feel free to reach out if you have questions. Thanks again! 😊"
