@@ -74,15 +74,22 @@ class MediaWiperGUI(QWidget):
 
         self.target_dir_label = QLabel("Target Directory:")
         self.target_dir_input = QLineEdit()
+        self.target_dir_input.setToolTip("Enter the directory to wipe media files from.")
         self.target_dir_button = QPushButton("Browse")
+        self.target_dir_button.setToolTip("Browse to select the target directory.")
         self.target_dir_button.clicked.connect(self.browse_directory)
 
-        self.secure_delete_checkbox = QCheckBox("Secure Delete")
+        self.secure_delete_checkbox = QCheckBox("Secure Delete (coming soon)")
+        self.secure_delete_checkbox.setEnabled(False)
+        self.secure_delete_checkbox.setToolTip("Enable secure deletion to overwrite files before deleting them (coming soon).")
         self.verbose_logging_checkbox = QCheckBox("Verbose Logging")
+        self.verbose_logging_checkbox.setToolTip("Enable verbose logging to see more detailed information in the log.")
         self.extensions_label = QLabel("File Extensions (comma-separated):")
         self.extensions_input = QLineEdit()
+        self.extensions_input.setToolTip("Enter the file extensions to delete, separated by commas (e.g., mp4,avi,mov).")
 
         self.enable_scheduling_checkbox = QCheckBox("Enable Scheduling")
+        self.enable_scheduling_checkbox.setToolTip("Enable or disable scheduled media wiping.")
         self.enable_scheduling_checkbox.stateChanged.connect(self.toggle_scheduling)
 
         self.schedule_interval_label = QLabel("Schedule Interval:")
@@ -90,19 +97,23 @@ class MediaWiperGUI(QWidget):
         self.schedule_interval_combo.addItem("Daily")
         self.schedule_interval_combo.addItem("Weekly")
         self.schedule_interval_combo.addItem("Monthly")
+        self.schedule_interval_combo.setToolTip("Select the schedule interval.")
         self.schedule_interval_combo.setEnabled(False)
 
         self.schedule_date_label = QLabel("Schedule Date:")
         self.schedule_date_edit = QDateEdit()
         self.schedule_date_edit.setDate(QDate.currentDate())
+        self.schedule_date_edit.setToolTip("Select the date to schedule the media wiping.")
         self.schedule_date_edit.setEnabled(False)
 
         self.schedule_time_label = QLabel("Schedule Time:")
         self.schedule_time_edit = QTimeEdit()
         self.schedule_time_edit.setTime(QTime.currentTime())
+        self.schedule_time_edit.setToolTip("Select the time to schedule the media wiping.")
         self.schedule_time_edit.setEnabled(False)
 
         self.wipe_button = QPushButton("Wipe Media")
+        self.wipe_button.setToolTip("Start wiping media files from the selected directory.")
         self.wipe_button.clicked.connect(self.start_wiping)
 
         self.log_widget = QTextEdit()
