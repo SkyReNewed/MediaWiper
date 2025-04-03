@@ -22,7 +22,7 @@ pip install PyQt6
 ### Command-Line Arguments
 
 *   `target_dir`:  The directory to wipe. This is a required argument.
-*   `-s` or `--secure`:  Enable secure deletion (overwrites the file with random data before deleting).
+*   `--secure-method {none,random,dod,random_35pass}`: Specify the secure deletion method. 'none' performs a standard delete (default). 'random' uses a single pass of random data. 'dod' uses the DoD 5220.22-M 3-pass method. 'random_35pass' uses 35 passes of random data.
 *   `-v` or `--verbose`:  Enable verbose logging (shows more detailed information about the deletion process).
 *   `-e` or `--extensions`:  Specify file extensions to delete (comma-separated). If not specified, the script will delete all common video and audio file types.
 *   `--name`: Specify the name of the output executable.
@@ -41,10 +41,10 @@ pip install PyQt6
     python media_wiper.py /path/to/your/directory -v
     ```
 
-*   **Wipe media files from a directory with secure deletion:**
+*   **Wipe media files using the DoD 3-pass secure method:**
 
     ```bash
-    python media_wiper.py /path/to/your/directory -s
+    python media_wiper.py /path/to/your/directory --secure-method dod
     ```
 
 *   **Wipe specific file types from a directory:**
@@ -70,7 +70,7 @@ python media_wiper.py
 This will open the MediaWiper GUI, which allows you to:
 
 *   Select the target directory to wipe.
-*   Enable secure deletion (coming soon).
+*   Select the secure deletion method (Standard, Single Pass Random, DoD 3 Pass, 35 Pass Random).
 *   Enable verbose logging.
 *   Specify file extensions to delete.
 *   Enable and configure scheduled media wiping.

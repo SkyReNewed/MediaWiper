@@ -13,9 +13,59 @@ from PyQt6.QtCore import Qt, QTime, QDate
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, log_widget=None):
+# Constants for secure deletion
+CHUNK_SIZE = 1024 * 1024  # 1MB chunks for overwriting
+
+def _overwrite_file(file_path, passes, method, log_widget=None):
+    """Helper function to overwrite a file securely."""
+    try:
+        file_size = os.path.getsize(file_path)
+        logging.debug(f"Overwriting {file_path} ({file_size} bytes) using method '{method}' ({passes} passes)...")
+        if log_widget:
+            log_widget.append(f"Overwriting {file_path} ({file_size} bytes) using method '{method}' ({passes} passes)...")
+
+        with open(file_path, 'wb') as f:
+            for p in range(passes):
+                logging.debug(f"Pass {p+1}/{passes} for {file_path}")
+                f.seek(0) # Go to the beginning for each pass
+                bytes_written = 0
+                while bytes_written < file_size:
+                    chunk = b''
+                    # Determine data pattern for the pass
+                    if method == 'random':
+                        chunk = os.urandom(min(CHUNK_SIZE, file_size - bytes_written))
+                    elif method == 'dod':
+                        if p == 0: # Pass 1: Zeros
+                            chunk = bytes(min(CHUNK_SIZE, file_size - bytes_written))
+                        elif p == 1: # Pass 2: Ones
+                            chunk = b'\xFF' * min(CHUNK_SIZE, file_size - bytes_written)
+                        else: # Pass 3: Random
+                            chunk = os.urandom(min(CHUNK_SIZE, file_size - bytes_written))
+                    elif method == 'random_35pass':
+                        # 35 passes using random data
+                        chunk = os.urandom(min(CHUNK_SIZE, file_size - bytes_written))
+                    else: # Default to random if method unknown (should not happen)
+                         chunk = os.urandom(min(CHUNK_SIZE, file_size - bytes_written))
+
+                    f.write(chunk)
+                    bytes_written += len(chunk)
+                f.flush()
+                os.fsync(f.fileno()) # Ensure data is written to disk
+        logging.debug(f"Finished overwriting {file_path}")
+        if log_widget:
+            log_widget.append(f"Finished overwriting {file_path}")
+        return True
+    except Exception as e:
+        logging.error(f"Error overwriting {file_path}: {e}")
+        if log_widget:
+            log_widget.append(f"Error overwriting {file_path}: {e}")
+        return False
+
+
+def wipe_media(target_dir, secure_method='none', verbose=False, extensions=None, log_widget=None):
     """
-    Wipes media files from the specified directory.
+    Wipes media files from the specified directory using the chosen method.
+    secure_method: 'none', 'random', 'dod', 'random_35pass'
     """
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -43,21 +93,39 @@ def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, 
 
                 if file_extension in media_extensions:
                     try:
-                        if secure_delete:
-                            # Implement secure deletion (replace with actual secure deletion logic)
-                            logging.debug(f"Securely deleting: {file_path}")
-                            if log_widget:
-                                log_widget.append(f"Securely deleting: {file_path}")
+                        if secure_method == 'none':
                             os.remove(file_path)
+                            logging.debug(f"Deleted (standard): {file_path}")
+                            if log_widget:
+                                log_widget.append(f"Deleted (standard): {file_path}")
                         else:
-                            os.remove(file_path)
-                            logging.debug(f"Deleted: {file_path}")
+                            logging.info(f"Securely deleting ({secure_method}): {file_path}")
                             if log_widget:
-                                log_widget.append(f"Deleted: {file_path}")
+                                log_widget.append(f"Securely deleting ({secure_method}): {file_path}")
+
+                            overwrite_successful = False
+                            if secure_method == 'random':
+                                overwrite_successful = _overwrite_file(file_path, passes=1, method='random', log_widget=log_widget)
+                            elif secure_method == 'dod':
+                                overwrite_successful = _overwrite_file(file_path, passes=3, method='dod', log_widget=log_widget)
+                            elif secure_method == 'random_35pass':
+                                # Using 35 random passes
+                                overwrite_successful = _overwrite_file(file_path, passes=35, method='random_35pass', log_widget=log_widget)
+
+                            if overwrite_successful:
+                                os.remove(file_path)
+                                logging.debug(f"Deleted (secure, {secure_method}): {file_path}")
+                                if log_widget:
+                                    log_widget.append(f"Deleted (secure, {secure_method}): {file_path}")
+                            else:
+                                logging.error(f"Skipping deletion of {file_path} due to overwrite error.")
+                                if log_widget:
+                                    log_widget.append(f"Skipping deletion of {file_path} due to overwrite error.")
+
                     except Exception as e:
-                        logging.error(f"Error deleting {file_path}: {e}")
+                        logging.error(f"Error processing {file_path}: {e}")
                         if log_widget:
-                            log_widget.append(f"Error deleting {file_path}: {e}")
+                            log_widget.append(f"Error processing {file_path}: {e}")
     except Exception as e:
         logging.error(f"Error during media wiping: {e}")
         if log_widget:
@@ -79,9 +147,14 @@ class MediaWiperGUI(QWidget):
         self.target_dir_button.setToolTip("Browse to select the target directory.")
         self.target_dir_button.clicked.connect(self.browse_directory)
 
-        self.secure_delete_checkbox = QCheckBox("Secure Delete (coming soon)")
-        self.secure_delete_checkbox.setEnabled(False)
-        self.secure_delete_checkbox.setToolTip("Enable secure deletion to overwrite files before deleting them (coming soon).")
+        self.secure_method_label = QLabel("Secure Deletion Method:")
+        self.secure_method_combo = QComboBox()
+        self.secure_method_combo.addItem("Standard Delete (Not Secure)", "none")
+        self.secure_method_combo.addItem("Secure: Single Pass (Random)", "random")
+        self.secure_method_combo.addItem("Secure: DoD 5220.22-M (3 Pass)", "dod")
+        self.secure_method_combo.addItem("Secure: 35 Pass (Random)", "random_35pass") # Renamed
+        self.secure_method_combo.setToolTip("Select the method for deleting files.\nStandard is fastest but not secure.\nSecure methods overwrite data before deletion.")
+
         self.verbose_logging_checkbox = QCheckBox("Verbose Logging")
         self.verbose_logging_checkbox.setToolTip("Enable verbose logging to see more detailed information in the log.")
         self.extensions_label = QLabel("File Extensions (comma-separated):")
@@ -123,7 +196,8 @@ class MediaWiperGUI(QWidget):
         layout.addWidget(self.target_dir_label)
         layout.addWidget(self.target_dir_input)
         layout.addWidget(self.target_dir_button)
-        layout.addWidget(self.secure_delete_checkbox)
+        layout.addWidget(self.secure_method_label)
+        layout.addWidget(self.secure_method_combo)
         layout.addWidget(self.verbose_logging_checkbox)
         layout.addWidget(self.extensions_label)
         layout.addWidget(self.extensions_input)
@@ -153,7 +227,8 @@ class MediaWiperGUI(QWidget):
 
     def start_wiping(self):
         target_dir = self.target_dir_input.text()
-        secure_delete = self.secure_delete_checkbox.isChecked()
+        # Get the method value ('none', 'random', 'dod', 'gutmann') from the combo box data
+        secure_method = self.secure_method_combo.currentData()
         verbose = self.verbose_logging_checkbox.isChecked()
         extensions = self.extensions_input.text()
         enable_scheduling = self.enable_scheduling_checkbox.isChecked()
@@ -191,9 +266,10 @@ class MediaWiperGUI(QWidget):
                 scheduler_path = os.path.join(os.getcwd(), "scheduler.py")
 
                 # Create a dictionary of wipe arguments
+                # Pass the secure_method string instead of the old boolean
                 wipe_args = {
                     "target_dir": target_dir,
-                    "secure_delete": secure_delete,
+                    "secure_method": secure_method,
                     "verbose": verbose,
                     "extensions": extensions
                 }
@@ -209,7 +285,8 @@ class MediaWiperGUI(QWidget):
                 QMessageBox.critical(self, "Error", f"Failed to start scheduler: {e}")
         else:
             # Wipe media immediately
-            wipe_media(target_dir, secure_delete, verbose, extensions, self.log_widget)
+            # Pass the secure_method string
+            wipe_media(target_dir, secure_method, verbose, extensions, self.log_widget)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -220,14 +297,19 @@ if __name__ == "__main__":
         # Parse command-line arguments
         parser = argparse.ArgumentParser(description="Wipe media files from a directory.")
         parser.add_argument("target_dir", help="The directory to wipe.")
-        parser.add_argument("-s", "--secure", action="store_true", help="Enable secure deletion.")
+        parser.add_argument(
+            "--secure-method",
+            choices=['none', 'random', 'dod', 'random_35pass'], # Updated choice
+            default='none',
+            help="Specify the secure deletion method ('none', 'random', 'dod', 'random_35pass'). 'none' is standard delete (default)." # Updated help
+        )
         parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
         parser.add_argument("-e", "--extensions", help="Specify file extensions to delete (comma-separated).")
 
         args = parser.parse_args()
 
-        # Run wipe_media with command-line arguments
-        wipe_media(args.target_dir, args.secure, args.verbose, args.extensions)
+        # Run wipe_media with command-line arguments, passing the secure_method
+        wipe_media(args.target_dir, secure_method=args.secure_method, verbose=args.verbose, extensions=args.extensions)
     else:
         # Show the GUI
         gui.show()

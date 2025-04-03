@@ -26,27 +26,30 @@ def main(schedule_info_json=None):
     if args.wipe_args:
         wipe_args = json.loads(args.wipe_args)
         target_dir = wipe_args["target_dir"]
-        secure_delete = wipe_args["secure_delete"]
+        # Use the new key 'secure_method' instead of 'secure_delete'
+        # Provide a default value ('none') if the key is missing for backward compatibility or testing
+        secure_method = wipe_args.get("secure_method", "none")
         verbose = wipe_args["verbose"]
         extensions = wipe_args["extensions"]
-        logging.info(f"Wipe args: target_dir={target_dir}, secure_delete={secure_delete}, verbose={verbose}, extensions={extensions}")
+        # Update logging to show the secure method
+        logging.info(f"Wipe args: target_dir={target_dir}, secure_method={secure_method}, verbose={verbose}, extensions={extensions}")
     else:
         target_dir = None
-        secure_delete = False
+        secure_method = "none" # Default to standard delete
         verbose = False
         extensions = None
         logging.info("Using default wipe arguments")
 
-    # Dynamically schedule the wipe_media function
+    # Dynamically schedule the wipe_media function using the new parameter name
     if interval == "daily":
         logging.info(f"Scheduling daily wipe at {time_to_run}")
-        schedule.every().day.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().day.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_method=secure_method, verbose=verbose, extensions=extensions)
     elif interval == "weekly":
         logging.info(f"Scheduling weekly wipe at {time_to_run}")
-        schedule.every().week.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().week.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_method=secure_method, verbose=verbose, extensions=extensions)
     elif interval == "monthly":
         logging.info(f"Scheduling monthly wipe at {time_to_run}")
-        schedule.every().month.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().month.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_method=secure_method, verbose=verbose, extensions=extensions)
     # Add other intervals as needed
 
     while True:
