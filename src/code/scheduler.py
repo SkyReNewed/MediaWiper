@@ -26,27 +26,42 @@ def main(schedule_info_json=None):
     if args.wipe_args:
         wipe_args = json.loads(args.wipe_args)
         target_dir = wipe_args["target_dir"]
-        secure_delete = wipe_args["secure_delete"]
-        verbose = wipe_args["verbose"]
-        extensions = wipe_args["extensions"]
-        logging.info(f"Wipe args: target_dir={target_dir}, secure_delete={secure_delete}, verbose={verbose}, extensions={extensions}")
+        target_dir = wipe_args.get("target_dir") # Use .get() for safety
+        secure_delete = wipe_args.get("secure_delete", False)
+        verbose = wipe_args.get("verbose", False)
+        extensions = wipe_args.get("extensions")
+        include_video = wipe_args.get("include_video", False)
+        include_audio = wipe_args.get("include_audio", False)
+        include_images = wipe_args.get("include_images", False)
+        include_documents = wipe_args.get("include_documents", False)
+        logging.info(f"Wipe args: target_dir={target_dir}, secure_delete={secure_delete}, verbose={verbose}, extensions={extensions}, "
+                     f"include_video={include_video}, include_audio={include_audio}, include_images={include_images}, include_documents={include_documents}")
     else:
         target_dir = None
         secure_delete = False
         verbose = False
         extensions = None
+        include_video = False
+        include_audio = False
+        include_images = False
+        include_documents = False
         logging.info("Using default wipe arguments")
 
-    # Dynamically schedule the wipe_media function
+    # Define the job function with all arguments
+    job = lambda: wipe_media(target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions,
+                             include_video=include_video, include_audio=include_audio, include_images=include_images,
+                             include_documents=include_documents)
+
+    # Dynamically schedule the job
     if interval == "daily":
         logging.info(f"Scheduling daily wipe at {time_to_run}")
-        schedule.every().day.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().day.at(time_to_run).do(job)
     elif interval == "weekly":
         logging.info(f"Scheduling weekly wipe at {time_to_run}")
-        schedule.every().week.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().week.at(time_to_run).do(job)
     elif interval == "monthly":
         logging.info(f"Scheduling monthly wipe at {time_to_run}")
-        schedule.every().month.at(time_to_run).do(wipe_media, target_dir=target_dir, secure_delete=secure_delete, verbose=verbose, extensions=extensions)
+        schedule.every().month.at(time_to_run).do(job)
     # Add other intervals as needed
 
     while True:
