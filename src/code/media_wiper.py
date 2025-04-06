@@ -13,6 +13,14 @@ from PyQt6.QtCore import Qt, QTime, QDate
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# Define standard file categories and extensions
+FILE_CATEGORIES = {
+    "Video": ['.mp4', '.avi', '.flv', '.wmv', '.mov', '.webm', '.mkv', '.f4v', '.vob', '.ogg', '.gifv', '.amv', '.mpg', '.mp2', '.mpeg', '.mpe', '.mpv', '.m4v', '.3gp'],
+    "Audio": ['.wav', '.aiff', '.mp3', '.aac', '.wma', '.ogg', '.flac'],
+    "Images": ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp', '.svg'],
+    "Documents": ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.odt']
+}
+
 # Constants for secure deletion
 CHUNK_SIZE = 1024 * 1024  # 1MB chunks for overwriting
 
@@ -61,10 +69,11 @@ def _overwrite_file(file_path, passes, method, log_widget=None):
             log_widget.append(f"Error overwriting {file_path}: {e}")
         return False
 
-
-def wipe_media(target_dir, secure_method='none', verbose=False, extensions=None, log_widget=None):
+def wipe_media(target_dir, secure_method='none', verbose=False, extensions=None,
+               include_video=False, include_audio=False, include_images=False,
+               include_documents=False, log_widget=None):
     """
-    Wipes media files from the specified directory using the chosen method.
+    Wipes media files from the specified directory based on selected categories and custom extensions using the chosen method.
     secure_method: 'none', 'random', 'dod', 'random_35pass'
     """
     if verbose:
@@ -74,16 +83,34 @@ def wipe_media(target_dir, secure_method='none', verbose=False, extensions=None,
     if log_widget:
         log_widget.append(f"Starting media wiping from: {target_dir}")
 
-    # Define default media file extensions
-    default_video_extensions = ['.mp4', '.avi', '.flv', '.wmv', '.mov', '.webm', '.mkv', '.f4v', '.vob', '.ogg', '.gifv', '.amv', '.mpg', '.mp2', '.mpeg', '.mpe', '.mpv', '.m4v', '.3gp']
-    default_audio_extensions = ['.wav', '.aiff', '.mp3', '.acc', '.wma', '.ogg', '.flac']
+    # Build the list of extensions to wipe
+    extensions_to_wipe = set()
+    if include_video:
+        extensions_to_wipe.update(FILE_CATEGORIES["Video"])
+    if include_audio:
+        extensions_to_wipe.update(FILE_CATEGORIES["Audio"])
+    if include_images:
+        extensions_to_wipe.update(FILE_CATEGORIES["Images"])
+    if include_documents:
+        extensions_to_wipe.update(FILE_CATEGORIES["Documents"])
 
     if extensions:
-        # Use user-specified extensions
-        media_extensions = [ext if ext.startswith('.') else '.' + ext for ext in extensions.split(',')]
-    else:
-        # Use default extensions
-        media_extensions = default_video_extensions + default_audio_extensions
+        custom_extensions = [ext.strip() for ext in extensions.split(',')]
+        for ext in custom_extensions:
+            if ext: # Avoid adding empty strings if there are trailing commas etc.
+                extensions_to_wipe.add(ext if ext.startswith('.') else '.' + ext)
+
+    media_extensions = list(extensions_to_wipe)
+
+    if not media_extensions:
+        logging.warning("No file extensions specified for wiping. Aborting.")
+        if log_widget:
+            log_widget.append("No file extensions specified for wiping. Aborting.")
+        return
+
+    logging.info(f"Targeting extensions: {', '.join(media_extensions)}")
+    if log_widget:
+        log_widget.append(f"Targeting extensions: {', '.join(media_extensions)}")
 
     try:
         for root, _, files in os.walk(target_dir):
@@ -157,9 +184,18 @@ class MediaWiperGUI(QWidget):
 
         self.verbose_logging_checkbox = QCheckBox("Verbose Logging")
         self.verbose_logging_checkbox.setToolTip("Enable verbose logging to see more detailed information in the log.")
-        self.extensions_label = QLabel("File Extensions (comma-separated):")
+        self.extensions_label = QLabel("Custom File Extensions (comma-separated):")
         self.extensions_input = QLineEdit()
-        self.extensions_input.setToolTip("Enter the file extensions to delete, separated by commas (e.g., mp4,avi,mov).")
+        self.extensions_input.setToolTip("Enter any additional custom file extensions to delete, separated by commas (e.g., .log,.tmp).")
+
+        self.video_checkbox = QCheckBox("Include Video Files")
+        self.video_checkbox.setToolTip("Include standard video file extensions like .mp4, .avi, .mov, etc.")
+        self.audio_checkbox = QCheckBox("Include Audio Files")
+        self.audio_checkbox.setToolTip("Include standard audio file extensions like .mp3, .wav, .aac, etc.")
+        self.images_checkbox = QCheckBox("Include Image Files")
+        self.images_checkbox.setToolTip("Include standard image file extensions like .jpg, .png, .gif, etc.")
+        self.documents_checkbox = QCheckBox("Include Document Files")
+        self.documents_checkbox.setToolTip("Include standard document file extensions like .pdf, .docx, .txt, etc.")
 
         self.enable_scheduling_checkbox = QCheckBox("Enable Scheduling")
         self.enable_scheduling_checkbox.setToolTip("Enable or disable scheduled media wiping.")
@@ -201,6 +237,10 @@ class MediaWiperGUI(QWidget):
         layout.addWidget(self.verbose_logging_checkbox)
         layout.addWidget(self.extensions_label)
         layout.addWidget(self.extensions_input)
+        layout.addWidget(self.video_checkbox)
+        layout.addWidget(self.audio_checkbox)
+        layout.addWidget(self.images_checkbox)
+        layout.addWidget(self.documents_checkbox)
         layout.addWidget(self.enable_scheduling_checkbox)
         layout.addWidget(self.schedule_interval_label)
         layout.addWidget(self.schedule_interval_combo)
@@ -231,6 +271,10 @@ class MediaWiperGUI(QWidget):
         secure_method = self.secure_method_combo.currentData()
         verbose = self.verbose_logging_checkbox.isChecked()
         extensions = self.extensions_input.text()
+        include_video = self.video_checkbox.isChecked()
+        include_audio = self.audio_checkbox.isChecked()
+        include_images = self.images_checkbox.isChecked()
+        include_documents = self.documents_checkbox.isChecked()
         enable_scheduling = self.enable_scheduling_checkbox.isChecked()
 
         if not target_dir:
@@ -271,7 +315,11 @@ class MediaWiperGUI(QWidget):
                     "target_dir": target_dir,
                     "secure_method": secure_method,
                     "verbose": verbose,
-                    "extensions": extensions
+                    "extensions": extensions,
+                    "include_video": include_video,
+                    "include_audio": include_audio,
+                    "include_images": include_images,
+                    "include_documents": include_documents
                 }
                 wipe_args_json = json.dumps(wipe_args)
 
@@ -286,7 +334,9 @@ class MediaWiperGUI(QWidget):
         else:
             # Wipe media immediately
             # Pass the secure_method string
-            wipe_media(target_dir, secure_method, verbose, extensions, self.log_widget)
+            wipe_media(target_dir, secure_method, verbose, extensions,
+                       include_video, include_audio, include_images, include_documents,
+                       self.log_widget)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
@@ -304,12 +354,18 @@ if __name__ == "__main__":
             help="Specify the secure deletion method ('none', 'random', 'dod', 'random_35pass'). 'none' is standard delete (default)." # Updated help
         )
         parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
-        parser.add_argument("-e", "--extensions", help="Specify file extensions to delete (comma-separated).")
+        parser.add_argument("-e", "--extensions", help="Specify custom file extensions to delete (comma-separated).")
+        parser.add_argument("--include-video", action="store_true", help="Include standard video extensions.")
+        parser.add_argument("--include-audio", action="store_true", help="Include standard audio extensions.")
+        parser.add_argument("--include-images", action="store_true", help="Include standard image extensions.")
+        parser.add_argument("--include-documents", action="store_true", help="Include standard document extensions.")
+
 
         args = parser.parse_args()
 
         # Run wipe_media with command-line arguments, passing the secure_method
-        wipe_media(args.target_dir, secure_method=args.secure_method, verbose=args.verbose, extensions=args.extensions)
+        wipe_media(args.target_dir, secure_method=args.secure_method, verbose=args.verbose, extensions=args.extensions,
+                   args.include_video, args.include_audio, args.include_images, args.include_documents)
     else:
         # Show the GUI
         gui.show()
