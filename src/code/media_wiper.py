@@ -365,7 +365,7 @@ if __name__ == "__main__":
 
         # Run wipe_media with command-line arguments, passing the secure_method
         wipe_media(args.target_dir, secure_method=args.secure_method, verbose=args.verbose, extensions=args.extensions,
-                   args.include_video, args.include_audio, args.include_images, args.include_documents)
+                   include_video=args.include_video, include_audio=args.include_audio, include_images=args.include_images, include_documents=args.include_documents)
     else:
         # Show the GUI
         gui.show()

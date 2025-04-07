@@ -4,14 +4,17 @@ MediaWiper is a tool to delete media files from different locations. It can be u
 
 ## Usage
 
-To use MediaWiper, you need to have Python and PyQt6 installed on your system.
+To use MediaWiper, you need to have Python installed on your system along with the following packages:
 
-### Installing PyQt6
+*   PyQt6 (for the GUI)
+*   schedule (for the scheduling feature)
 
-You can install PyQt6 using pip:
+### Installing Dependencies
+
+You can install the required packages using pip:
 
 ```bash
-pip install PyQt6
+pip install PyQt6 schedule
 ```
 
 ## Command-Line Usage

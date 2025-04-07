@@ -34,7 +34,7 @@ def main(schedule_info_json=None):
         include_audio = wipe_args.get("include_audio", False)
         include_images = wipe_args.get("include_images", False)
         include_documents = wipe_args.get("include_documents", False)
-        logging.info(f"Wipe args: target_dir={target_dir}, secure_delete={secure_delete}, verbose={verbose}, extensions={extensions}, "
+        logging.info(f"Wipe args: target_dir={target_dir}, secure_method={secure_method}, verbose={verbose}, extensions={extensions}, "
                      f"include_video={include_video}, include_audio={include_audio}, include_images={include_images}, include_documents={include_documents}")
     else:
         target_dir = None
