@@ -3,7 +3,8 @@ import time
 import argparse
 import json
 import logging
-from media_wiper import wipe_media  # Import the wipe_media function
+import threading
+from media_wiper import wipe_media
 
 def main(schedule_info_json=None):
     parser = argparse.ArgumentParser()
@@ -53,9 +54,13 @@ def main(schedule_info_json=None):
                              include_video=include_video, include_audio=include_audio, include_images=include_images,
                              include_documents=include_documents)
 
+    # Create a new thread for the wipe_media function
+    wipe_thread = threading.Thread(target=job)
+    # Start the thread
+    wipe_thread.start()
+
     # Dynamically schedule the job
     if interval == "daily":
-        logging.info(f"Scheduling daily wipe at {time_to_run}")
         schedule.every().day.at(time_to_run).do(job)
     elif interval == "weekly":
         logging.info(f"Scheduling weekly wipe at {time_to_run}")

@@ -13,3 +13,4 @@ plans and ideas
 oldrelease
 *.spec
 build
+.vscode
