@@ -25,7 +25,8 @@ except ImportError as e:
     sys.exit(f"Failed to import necessary modules. Please check installation/structure. Error: {e}")
 
 
-if __name__ == "__main__":
+def main():
+    """Parses arguments and runs either CLI or GUI mode."""
     # --- Command-Line Argument Handling ---
     parser = argparse.ArgumentParser(
         description="Wipe media files from a directory. Run without arguments for GUI.",
@@ -104,3 +105,6 @@ if __name__ == "__main__":
         gui = MediaWiperGUI()
         gui.show()
         sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()
