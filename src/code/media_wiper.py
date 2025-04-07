@@ -1,234 +1,110 @@
-import os
-import shutil
-import logging
-import argparse
-import sys
-import subprocess
-import json
-from PyQt6.QtWidgets import (QApplication, QWidget, QLabel, QLineEdit,
-                             QPushButton, QVBoxLayout, QCheckBox, QTextEdit,
-                             QFileDialog, QComboBox, QTimeEdit, QMessageBox, QDateEdit)
-from PyQt6.QtCore import Qt, QTime, QDate
+"""
+Main entry point for the MediaWiper application.
+Handles command-line arguments or launches the GUI.
+"""
 
-# Configure logging
+import os
+import sys
+import argparse
+import logging
+from PyQt6.QtWidgets import QApplication
+
+# Configure logging (can be configured further based on args)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def wipe_media(target_dir, secure_delete=False, verbose=False, extensions=None, log_widget=None):
-    """
-    Wipes media files from the specified directory.
-    """
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+# --- Relative Imports from within the 'code' package ---
+try:
+    from .ui.main_window import MediaWiperGUI
+    # Import the CLI function and rename it to avoid conflict if needed
+    from .core.wiper import wipe_media as wipe_media_cli
+except ImportError as e:
+    logging.error(f"Import Error: {e}. Ensure the application structure is correct and running from the intended directory.")
+    # Attempt absolute import as fallback if running script directly for testing? Risky.
+    # from ui.main_window import MediaWiperGUI
+    # from core.wiper import wipe_media as wipe_media_cli
+    sys.exit(f"Failed to import necessary modules. Please check installation/structure. Error: {e}")
 
-    logging.info(f"Starting media wiping from: {target_dir}")
-    if log_widget:
-        log_widget.append(f"Starting media wiping from: {target_dir}")
 
-    # Define default media file extensions
-    default_video_extensions = ['.mp4', '.avi', '.flv', '.wmv', '.mov', '.webm', '.mkv', '.f4v', '.vob', '.ogg', '.gifv', '.amv', '.mpg', '.mp2', '.mpeg', '.mpe', '.mpv', '.m4v', '.3gp']
-    default_audio_extensions = ['.wav', '.aiff', '.mp3', '.acc', '.wma', '.ogg', '.flac']
+def main():
+    """Parses arguments and runs either CLI or GUI mode."""
+    # --- Command-Line Argument Handling ---
+    parser = argparse.ArgumentParser(
+        description="Wipe media files from a directory. Run without arguments for GUI.",
+        add_help=False # Add help manually to avoid conflict with GUI launch
+    )
+    # Add arguments for CLI mode
+    parser.add_argument("target_dir", nargs='?', help="The directory to wipe media files from (required for CLI mode).")
+    parser.add_argument(
+        "--secure-method",
+        choices=['none', 'random', 'dod', 'random_35pass'],
+        default='none',
+        help="Secure deletion method ('none', 'random', 'dod', 'random_35pass'). Default: 'none'."
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable detailed (debug) logging.")
+    parser.add_argument("-e", "--extensions", help="Custom file extensions to delete (e.g., '.log,.tmp').")
+    parser.add_argument("--include-video", action="store_true", help="Include standard video files.")
+    parser.add_argument("--include-audio", action="store_true", help="Include standard audio files.")
+    parser.add_argument("--include-images", action="store_true", help="Include standard image files.")
+    parser.add_argument("--include-documents", action="store_true", help="Include standard document files.")
+    # Add explicit help argument
+    parser.add_argument(
+        '-h', '--help', action='help', default=argparse.SUPPRESS,
+        help='Show this help message and exit.'
+    )
 
-    if extensions:
-        # Use user-specified extensions
-        media_extensions = [ext if ext.startswith('.') else '.' + ext for ext in extensions.split(',')]
-    else:
-        # Use default extensions
-        media_extensions = default_video_extensions + default_audio_extensions
+    # Parse known args first to see if it's likely a CLI call
+    # Use parse_known_args to avoid errors if extra args are passed (e.g., by Qt)
+    args, unknown = parser.parse_known_args()
 
-    try:
-        for root, _, files in os.walk(target_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                file_extension = os.path.splitext(file)[1].lower()
+    # Determine if running in CLI mode
+    # Simple check: if target_dir is provided, assume CLI.
+    # More robust: check if any CLI-specific args were given beyond the script name.
+    is_cli_run = args.target_dir is not None
 
-                if file_extension in media_extensions:
-                    try:
-                        if secure_delete:
-                            # Implement secure deletion (replace with actual secure deletion logic)
-                            logging.debug(f"Securely deleting: {file_path}")
-                            if log_widget:
-                                log_widget.append(f"Securely deleting: {file_path}")
-                            os.remove(file_path)
-                        else:
-                            os.remove(file_path)
-                            logging.debug(f"Deleted: {file_path}")
-                            if log_widget:
-                                log_widget.append(f"Deleted: {file_path}")
-                    except Exception as e:
-                        logging.error(f"Error deleting {file_path}: {e}")
-                        if log_widget:
-                            log_widget.append(f"Error deleting {file_path}: {e}")
-    except Exception as e:
-        logging.error(f"Error during media wiping: {e}")
-        if log_widget:
-            log_widget.append(f"Error during media wiping: {e}")
+    if is_cli_run:
+        # --- CLI Mode ---
+        logging.info("Running MediaWiper in CLI mode.")
 
-    logging.info("Media wiping complete.")
-    if log_widget:
-        log_widget.append("Media wiping complete.")
-
-class MediaWiperGUI(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("MediaWiper")
-
-        self.target_dir_label = QLabel("Target Directory:")
-        self.target_dir_input = QLineEdit()
-        self.target_dir_input.setToolTip("Enter the directory to wipe media files from.")
-        self.target_dir_button = QPushButton("Browse")
-        self.target_dir_button.setToolTip("Browse to select the target directory.")
-        self.target_dir_button.clicked.connect(self.browse_directory)
-
-        self.secure_delete_checkbox = QCheckBox("Secure Delete (coming soon)")
-        self.secure_delete_checkbox.setEnabled(False)
-        self.secure_delete_checkbox.setToolTip("Enable secure deletion to overwrite files before deleting them (coming soon).")
-        self.verbose_logging_checkbox = QCheckBox("Verbose Logging")
-        self.verbose_logging_checkbox.setToolTip("Enable verbose logging to see more detailed information in the log.")
-        self.extensions_label = QLabel("File Extensions (comma-separated):")
-        self.extensions_input = QLineEdit()
-        self.extensions_input.setToolTip("Enter the file extensions to delete, separated by commas (e.g., mp4,avi,mov).")
-
-        self.enable_scheduling_checkbox = QCheckBox("Enable Scheduling")
-        self.enable_scheduling_checkbox.setToolTip("Enable or disable scheduled media wiping.")
-        self.enable_scheduling_checkbox.stateChanged.connect(self.toggle_scheduling)
-
-        self.schedule_interval_label = QLabel("Schedule Interval:")
-        self.schedule_interval_combo = QComboBox()
-        self.schedule_interval_combo.addItem("Daily")
-        self.schedule_interval_combo.addItem("Weekly")
-        self.schedule_interval_combo.addItem("Monthly")
-        self.schedule_interval_combo.setToolTip("Select the schedule interval.")
-        self.schedule_interval_combo.setEnabled(False)
-
-        self.schedule_date_label = QLabel("Schedule Date:")
-        self.schedule_date_edit = QDateEdit()
-        self.schedule_date_edit.setDate(QDate.currentDate())
-        self.schedule_date_edit.setToolTip("Select the date to schedule the media wiping.")
-        self.schedule_date_edit.setEnabled(False)
-
-        self.schedule_time_label = QLabel("Schedule Time:")
-        self.schedule_time_edit = QTimeEdit()
-        self.schedule_time_edit.setTime(QTime.currentTime())
-        self.schedule_time_edit.setToolTip("Select the time to schedule the media wiping.")
-        self.schedule_time_edit.setEnabled(False)
-
-        self.wipe_button = QPushButton("Wipe Media")
-        self.wipe_button.setToolTip("Start wiping media files from the selected directory.")
-        self.wipe_button.clicked.connect(self.start_wiping)
-
-        self.log_widget = QTextEdit()
-        self.log_widget.setReadOnly(True)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.target_dir_label)
-        layout.addWidget(self.target_dir_input)
-        layout.addWidget(self.target_dir_button)
-        layout.addWidget(self.secure_delete_checkbox)
-        layout.addWidget(self.verbose_logging_checkbox)
-        layout.addWidget(self.extensions_label)
-        layout.addWidget(self.extensions_input)
-        layout.addWidget(self.enable_scheduling_checkbox)
-        layout.addWidget(self.schedule_interval_label)
-        layout.addWidget(self.schedule_interval_combo)
-        layout.addWidget(self.schedule_date_label)
-        layout.addWidget(self.schedule_date_edit)
-        layout.addWidget(self.schedule_time_label)
-        layout.addWidget(self.schedule_time_edit)
-        self.next_schedule_label = QLabel("Next Schedule: N/A")
-        layout.addWidget(self.next_schedule_label)
-        layout.addWidget(self.wipe_button)
-        layout.addWidget(self.log_widget)
-
-        self.setLayout(layout)
-
-    def browse_directory(self):
-        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
-        if directory:
-            self.target_dir_input.setText(directory)
-
-    def toggle_scheduling(self, state):
-        self.schedule_interval_combo.setEnabled(state == Qt.CheckState.Checked.value)
-        self.schedule_date_edit.setEnabled(state == Qt.CheckState.Checked.value)
-        self.schedule_time_edit.setEnabled(state == Qt.CheckState.Checked.value)
-
-    def start_wiping(self):
-        target_dir = self.target_dir_input.text()
-        secure_delete = self.secure_delete_checkbox.isChecked()
-        verbose = self.verbose_logging_checkbox.isChecked()
-        extensions = self.extensions_input.text()
-        enable_scheduling = self.enable_scheduling_checkbox.isChecked()
-
-        if not target_dir:
-            QMessageBox.critical(self, "Error", "Please select a target directory.")
-            return
-
-        if enable_scheduling:
-            schedule_interval = self.schedule_interval_combo.currentText()
-            schedule_date = self.schedule_date_edit.date()
-            schedule_time = self.schedule_time_edit.time()
-
-            # Create schedule info
-            schedule_info = {
-                "interval": schedule_interval.lower(),
-                "date": schedule_date.toString("yyyy-MM-dd"),
-                "time": schedule_time.toString("HH:mm")
-            }
-            schedule_info_json = json.dumps(schedule_info)
-
-            # Calculate next schedule time
-            next_schedule = "N/A"
-            if schedule_interval == "Daily":
-                next_schedule = schedule_date.addDays(1).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
-            elif schedule_interval == "Weekly":
-                next_schedule = schedule_date.addDays(7).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
-            elif schedule_interval == "Monthly":
-                next_schedule = schedule_date.addMonths(1).toString("yyyy-MM-dd") + " " + schedule_time.toString("HH:mm")
-
-            self.next_schedule_label.setText(f"Next Schedule: {next_schedule}")
-
-            # Start the scheduler.py script as a separate process
-            try:
-                scheduler_path = os.path.join(os.getcwd(), "scheduler.py")
-
-                # Create a dictionary of wipe arguments
-                wipe_args = {
-                    "target_dir": target_dir,
-                    "secure_delete": secure_delete,
-                    "verbose": verbose,
-                    "extensions": extensions
-                }
-                wipe_args_json = json.dumps(wipe_args)
-
-                subprocess.Popen(
-                    ["python", scheduler_path, "--schedule_info", schedule_info_json, "--wipe_args", wipe_args_json],
-                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-                )
-                self.log_widget.append("Scheduled media wiping task.")
-                QMessageBox.information(self, "Success", "Media wiping scheduled successfully.")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to start scheduler: {e}")
+        # Configure logging level based on CLI args
+        if args.verbose:
+            logging.getLogger().setLevel(logging.DEBUG)
         else:
-            # Wipe media immediately
-            wipe_media(target_dir, secure_delete, verbose, extensions, self.log_widget)
+            logging.getLogger().setLevel(logging.INFO)
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    gui = MediaWiperGUI()
+        # Validate target directory for CLI mode
+        if not os.path.isdir(args.target_dir):
+             print(f"Error: Target directory '{args.target_dir}' not found or is not a directory.", file=sys.stderr)
+             sys.exit(1)
 
-    # Check if there are command-line arguments
-    if len(sys.argv) > 1:
-        # Parse command-line arguments
-        parser = argparse.ArgumentParser(description="Wipe media files from a directory.")
-        parser.add_argument("target_dir", help="The directory to wipe.")
-        parser.add_argument("-s", "--secure", action="store_true", help="Enable secure deletion.")
-        parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
-        parser.add_argument("-e", "--extensions", help="Specify file extensions to delete (comma-separated).")
+        try:
+            # Run the imported CLI wipe function
+            wipe_media_cli(
+                args.target_dir,
+                secure_method=args.secure_method,
+                verbose=args.verbose,
+                extensions=args.extensions,
+                include_video=args.include_video,
+                include_audio=args.include_audio,
+                include_images=args.include_images,
+                include_documents=args.include_documents,
+                log_widget=None # No GUI log widget in CLI mode
+            )
+            logging.info("CLI execution finished.")
+            sys.exit(0) # Exit successfully after CLI run
 
-        args = parser.parse_args()
+        except Exception as e:
+             logging.error(f"Error during CLI execution: {e}", exc_info=True)
+             print(f"An unexpected error occurred: {e}", file=sys.stderr)
+             sys.exit(1) # Exit with error code
 
-        # Run wipe_media with command-line arguments
-        wipe_media(args.target_dir, args.secure, args.verbose, args.extensions)
     else:
-        # Show the GUI
+        # --- GUI Mode ---
+        logging.info("Starting MediaWiper GUI.")
+        # Note: QApplication might modify sys.argv, which is why parse_known_args was used.
+        app = QApplication(sys.argv)
+        gui = MediaWiperGUI()
         gui.show()
         sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

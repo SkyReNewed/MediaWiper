@@ -1,5 +1,6 @@
 ﻿__pycache__
 build/
+.github
 *.pyc
 *.egg-info/
 dist/
@@ -11,4 +12,5 @@ venv/
 plans and ideas
 oldrelease
 *.spec
-.github
+build
+.vscode
